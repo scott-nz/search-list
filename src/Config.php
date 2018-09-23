@@ -15,7 +15,24 @@ class Config extends Object
 {
     private static $session_key = 'SearchListRememberedClient';
     private static $batch_length = 100;
-    private static $indices = [];
+
+    private static $indices = [[
+        'name' => 'MPI UAT2',
+        'class' => 'FAQ',
+        'has_one' => true,
+        'has_many' => true,
+        'many_many' => true,
+        'searchableAttributes' => [
+            'Question',
+            'Answer',
+            'Keywords',
+            'Category'
+        ],
+        'attributesForFaceting' => [
+            'Keywords',
+            'Category'
+        ]
+    ]];
     private static $clients = [
         [
             'name' => 'MySQL',
@@ -60,6 +77,7 @@ class Config extends Object
 
     public static function resolveClient($clientName = null)
     {
+        $request          = Injector::inst()->get(SS_HTTPRequest::class);
         $session          = self::currentSession();
         $clients          = ArrayList::create(self::config()->get('clients'));
         $rememberedClient = $session->get(self::config()->get('session_key'));

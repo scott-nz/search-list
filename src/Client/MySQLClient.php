@@ -50,7 +50,7 @@ class MySQLClient implements SearchClientAdaptor, DataSearcher
      */
     public function createIndex($indexName)
     {
-        return $this->initIndex($indexName);
+        return $this->initIndex($indexname);
     }
 
     /**
@@ -89,11 +89,12 @@ class MySQLClient implements SearchClientAdaptor, DataSearcher
 
     public function search($term, $filters, $pageNumber, $pageLength)
     {
+        $attribs  = $this->indexConfig['searchableAttributes'];
+        $fields   = Config::databaseFields($this->indexConfig['class']);
         $object   = Injector::inst()->create($this->indexConfig['class']);
-        $attribs  = (array) $this->indexConfig['searchableAttributes'];
-        $hasOne   = (array) $object->config()->get('has_one');
-        $hasMany  = (array) $object->config()->get('has_many');
-        $manyMany = (array) $object->config()->get('many_many');
+        $hasOne   = $object->config()->get('has_one');
+        $hasMany  = $object->config()->get('has_many');
+        $manyMany = $object->config()->get('many_many');
 
         $foreign    = array_merge((array) $hasOne, (array) $hasMany, (array) $manyMany);
         $orFilters  = $this->createInitialPartialMatch($term);
@@ -107,37 +108,33 @@ class MySQLClient implements SearchClientAdaptor, DataSearcher
             $filterKey      = array_shift($columnFilters);
             $filterName     = implode(':', $columnFilters);
             $filterValue    = current($filter);
-            $isForeign      = false;
 
             foreach ($foreignKeys as $columnName => $dataClass) {
-                $isForeign = false;
                 if ($columnName !== $filterKey) {
                     continue;
                 }
                 $filterName  = $filterName ?: 'PartialMatch';
-                $fieldSpec = Config::databaseFields($dataClass);
+                $filterValue = $term;
+                $titleOrName = '';
 
-                if (isset($fieldSpec['Title'])) {
+                if ($schema->fieldSpec($dataClass, 'Title')) {
                     $titleOrName = 'Title';
-                } elseif (isset($fieldSpec['Name'])) {
+                }
+
+                if ($schema->fieldSpec($dataClass, 'Name')) {
                     $titleOrName = 'Name';
-                } else {
-                    $titleOrName = '';
                 }
 
                 if (!$titleOrName) {
                     continue;
                 }
 
-                $isForeign = true;
-                $andFilters[$filterKey . '.' . $titleOrName . ':' . $filterName] = $filterValue;
+                $orFilters[$filterKey . '.' . $titleOrName . ':' . $filterName] = $filterValue;
                 break;
             }
 
-            if (!$isForeign) {
-                $filterName = $filterName ? ':' . $filterName : '';
-                $andFilters[$filterKey . $filterName] = $filterValue;
-            }
+            $filterName = $filterName ? ':' . $filterName : '';
+            $andFilters[$filterKey . $filterName] = $filterValue;
         }
 
 
@@ -151,9 +148,7 @@ class MySQLClient implements SearchClientAdaptor, DataSearcher
 
         $this->response = ['_total' => $this->clientAPI->count()];
 
-
-        $start = ($pageNumber - 1) * $pageLength;
-        $this->clientAPI = $this->clientAPI->limit("$start,$pageLength");
+        $this->clientAPI = $this->clientAPI->limit("$pageNumber,$pageLength");
 
         $this->response['hits'] = $this->clientAPI->toArray();
         $this->rawQuery = $this->clientAPI->sql();
